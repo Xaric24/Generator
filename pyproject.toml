@@ -1,2 +1,15 @@
+[project]
+name = "commander-forge-api"
+version = "0.1.0"
+requires-python = "==3.12.*"
+dependencies = [
+  "fastapi==0.110.1",
+  "python-dotenv>=1.0.1",
+  "motor==3.3.1",
+  "pymongo==4.6.3",
+  "pydantic>=2.6.4",
+  "requests>=2.31.0",
+]
+
 [tool.vercel]
 entrypoint = "backend.server:app"
