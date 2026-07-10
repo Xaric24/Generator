@@ -413,7 +413,7 @@ function DeckHeader({ deck }) {
       )}
       {!deck.ai_used && (
         <div className="mt-2 text-[11px] text-secondary flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3" /> Deterministic mode (AI key budget unavailable — add balance in Profile → Universal Key to enable AI strategy & primers).
+          <Sparkles className="w-3 h-3" /> Deterministic mode (AI request was rate-limited or quota exhausted; check OpenAI billing/usage to enable AI strategy & primers).
         </div>
       )}
     </div>
