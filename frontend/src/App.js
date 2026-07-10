@@ -75,7 +75,7 @@ function CardName({ card, className }) {
   return (
     <HoverCard openDelay={120} closeDelay={40}>
       <HoverCardTrigger asChild>
-        <span className={`cursor-default transition-colors duration-200 hover:text-primary ${className || ""}`}>{card.name}</span>
+        <span className={`block cursor-default transition-colors duration-200 hover:text-primary ${className || ""}`}>{card.name}</span>
       </HoverCardTrigger>
       {card.image && (
         <HoverCardContent side="right" className="w-[240px] p-0 border-border bg-transparent shadow-2xl">
@@ -448,7 +448,7 @@ function Decklist({ deck }) {
           {groups[g].map((c, i) => (
             <motion.div key={c.name + i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.01, 0.3) }}
               data-testid="card-row" className="flex items-center gap-2 px-4 py-1.5 border-b border-border/40 hover:bg-primary/5 transition-colors duration-150 text-sm">
-              <div className="w-8 shrink-0"><ManaCost cost={c.mana_cost} /></div>
+              <div className="w-24 shrink-0 overflow-hidden"><ManaCost cost={c.mana_cost} /></div>
               <CardName card={c} className="font-medium min-w-0 truncate flex-1" />
               {c.in_synergy && <Sparkles className="w-3 h-3 text-accent shrink-0" title="Synergy core" />}
               <span className="hidden md:block text-[11px] text-muted-foreground truncate max-w-[280px] flex-1" title={c.reason}>{c.reason}</span>
