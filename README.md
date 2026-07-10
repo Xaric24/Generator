@@ -112,7 +112,7 @@ This repo includes `.github/workflows/pages.yml`. In the GitHub repository:
 3. Add a repository variable named `REACT_APP_BACKEND_URL` with your API origin.
 4. Push to `main`; the workflow builds `frontend/` and publishes `frontend/build`.
 
-The React build is configured for `https://xaric24.github.io/generator`.
+The React build is configured for `https://xaric24.github.io/Generator`.
 
 ### Vercel FastAPI backend
 

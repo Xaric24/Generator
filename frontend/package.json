@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "0.1.0",
-  "homepage": "https://xaric24.github.io/generator",
+  "homepage": "https://xaric24.github.io/Generator",
   "private": true,
   "dependencies": {
     "@hookform/resolvers": "5.0.1",
