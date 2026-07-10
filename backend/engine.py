@@ -30,6 +30,7 @@ MODE_TARGETS = {
     "theme": dict(ramp=9, draw=9, removal=8, wipe=3, counter=3, tutor=2),
 }
 GAME_CHANGER_LIMITS = {"br3": 3}
+THEME_MINIMUMS = {"cascade": 8}
 OTAG = {"ramp": "otag:ramp", "draw": "otag:card-advantage", "removal": "otag:removal",
         "wipe": "otag:board-wipe", "counter": "otag:counterspell", "tutor": "otag:tutor"}
 THEME_QUERIES = {
@@ -370,6 +371,53 @@ async def _enforce_game_changer_limit(sf, deck, reasons, ci, cmd, params):
     _enforce_100(deck, reasons, ci, cmd, params)
 
 
+async def _enforce_theme_minimum(sf, deck, reasons, ci, cmd, params):
+    theme = _theme_key(params.get("theme"))
+    minimum = THEME_MINIMUMS.get(theme)
+    if not minimum:
+        return
+
+    def themed_cards():
+        return [c for c in deck.values() if _theme_card_match(c, theme)]
+
+    if len(themed_cards()) >= minimum:
+        return
+
+    pool = []
+    for q in THEME_QUERIES.get(theme, []):
+        query = f"{q} {ci_query(ci)} legal:commander -is:funny"
+        maxp = params.get("max_price_per_card")
+        if maxp:
+            query += f" usd<={maxp}"
+        try:
+            cards = await sf.search(query, limit=80, order="edhrec")
+        except Exception:
+            cards = []
+        for c in cards:
+            nc = norm_card(c)
+            ok, _ = passes_filters(nc, ci, None, params)
+            if ok and not nc["is_land"] and _theme_card_match(nc, theme):
+                pool.append(nc)
+
+    seen = set(deck.keys())
+    pool = [c for c in pool if c["name"] not in seen]
+    locked = set(params["locks"])
+    while len(themed_cards()) < minimum and pool:
+        replacement = pool.pop(0)
+        removable = [c for c in deck.values()
+                     if not c["is_land"] and c["name"] != cmd["name"]
+                     and c["name"] not in locked and not _theme_card_match(c, theme)]
+        if not removable:
+            break
+        victim = min(removable, key=lambda c: reasons.get(c["name"], (0,))[0])
+        del deck[victim["name"]]; reasons.pop(victim["name"], None)
+        sc, rz = score_card(replacement, {replacement["name"]}, params.get("mode", "theme"), ci)
+        deck[replacement["name"]] = replacement
+        reasons[replacement["name"]] = (sc, f"{theme.title()} theme card - {rz}")
+
+    _enforce_100(deck, reasons, ci, cmd, params)
+
+
 def color_pips(cards):
     counts = {c: 0 for c in "WUBRG"}
     for card in cards:
@@ -411,13 +459,14 @@ async def generate(sf, db, params, progress=None):
     if theme and synergy_names:
         resolved_theme = await sf.collection(synergy_names[:35])
         theme_hits = sum(1 for c in resolved_theme if _theme_card_match(norm_card(c), theme))
-        if theme_hits < 8:
+        if _theme_key(theme) in THEME_MINIMUMS or theme_hits < 8:
             _p("Reinforcing theme package...")
             det_synergy = await _deterministic_synergy(sf, cmd, ci, params, mode)
             det_names = [c["name"] for c in det_synergy]
             synergy_names = list(dict.fromkeys(det_names + synergy_names))
             analysis["cards"] = synergy_names
-            analysis["archetype"] = f"{_theme_key(theme).title()} {analysis.get('archetype', 'Commander')}"
+            if _theme_key(theme).lower() not in analysis.get("archetype", "").lower():
+                analysis["archetype"] = f"{_theme_key(theme).title()} {analysis.get('archetype', 'Commander')}"
     if not synergy_names:
         _p("Deriving synergy package...")
         det_synergy = await _deterministic_synergy(sf, cmd, ci, params, mode)
@@ -527,11 +576,13 @@ async def generate(sf, db, params, progress=None):
     _enforce_100(deck, reasons, ci, cmd, params)
 
     # 6a) enforce bracket-specific Game Changer caps
+    await _enforce_theme_minimum(sf, deck, reasons, ci, cmd, params)
     await _enforce_game_changer_limit(sf, deck, reasons, ci, cmd, params)
 
     # 6b) enforce total budget (never silently exceed)
     if budget:
         await _enforce_budget(sf, deck, reasons, ci, cmd, params, budget)
+        await _enforce_theme_minimum(sf, deck, reasons, ci, cmd, params)
         await _enforce_game_changer_limit(sf, deck, reasons, ci, cmd, params)
 
     cards = list(deck.values())
