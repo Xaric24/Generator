@@ -29,6 +29,7 @@ MODE_TARGETS = {
     "budget": dict(ramp=10, draw=10, removal=9, wipe=3, counter=3, tutor=2),
     "theme": dict(ramp=9, draw=9, removal=8, wipe=3, counter=3, tutor=2),
 }
+GAME_CHANGER_LIMITS = {"br3": 3}
 OTAG = {"ramp": "otag:ramp", "draw": "otag:card-advantage", "removal": "otag:removal",
         "wipe": "otag:board-wipe", "counter": "otag:counterspell", "tutor": "otag:tutor"}
 
@@ -57,6 +58,7 @@ def norm_card(c):
         "legal": (c.get("legalities") or {}).get("commander") == "legal",
         "edhrec": c.get("edhrec_rank", 999999) or 999999, "layout": c.get("layout", "normal"),
         "set": (c.get("set") or "").upper(), "cn": c.get("collector_number", ""),
+        "game_changer": bool(c.get("game_changer")),
         "is_land": "Land" in tl, "is_basic": c["name"] in BASICS,
         "is_mdfc": c.get("layout") in ("modal_dfc", "transform") and "Land" in " ".join(
             f.get("type_line", "") for f in c.get("card_faces", [])),
@@ -264,6 +266,61 @@ async def _fetch_category(sf, tag, ci, params, need, exclude_names):
     return out
 
 
+def _game_changers(deck):
+    return [c for c in deck.values() if c.get("game_changer")]
+
+
+async def _enforce_game_changer_limit(sf, deck, reasons, ci, cmd, params):
+    limit = GAME_CHANGER_LIMITS.get(params.get("mode"))
+    if limit is None:
+        return
+
+    def count():
+        return len(_game_changers(deck))
+
+    if count() <= limit:
+        return
+
+    locked = set(params["locks"])
+    q = f"{ci_query(ci)} legal:commander -t:land -is:funny -is:gamechanger"
+    maxp = params.get("max_price_per_card")
+    if maxp:
+        q += f" usd<={maxp}"
+    try:
+        pool = await sf.search(q, limit=160, order="edhrec")
+    except Exception:
+        pool = []
+    replacements = []
+    for c in pool:
+        nc = norm_card(c)
+        ok, _ = passes_filters(nc, ci, None, params)
+        if ok and not nc.get("game_changer") and nc["name"] not in deck:
+            replacements.append(nc)
+
+    while count() > limit:
+        removable = [c for c in _game_changers(deck)
+                     if c["name"] != cmd["name"] and c["name"] not in locked]
+        if not removable:
+            break
+        victim = min(removable, key=lambda c: reasons.get(c["name"], (0,))[0])
+        del deck[victim["name"]]; reasons.pop(victim["name"], None)
+
+        if victim["is_land"]:
+            _add_basics(deck, reasons, ci, sum(1 for c in deck.values() if c["is_land"]) + 1)
+            continue
+
+        while replacements:
+            rc = replacements.pop(0)
+            if rc["name"] in deck:
+                continue
+            sc, rz = score_card(rc, set(), params.get("mode", "optimized"), ci)
+            deck[rc["name"]] = rc
+            reasons[rc["name"]] = (sc, "BR3 Game Changer replacement - " + rz)
+            break
+
+    _enforce_100(deck, reasons, ci, cmd, params)
+
+
 def color_pips(cards):
     counts = {c: 0 for c in "WUBRG"}
     for card in cards:
@@ -409,9 +466,13 @@ async def generate(sf, db, params, progress=None):
     # 6) enforce exactly 100
     _enforce_100(deck, reasons, ci, cmd, params)
 
+    # 6a) enforce bracket-specific Game Changer caps
+    await _enforce_game_changer_limit(sf, deck, reasons, ci, cmd, params)
+
     # 6b) enforce total budget (never silently exceed)
     if budget:
         await _enforce_budget(sf, deck, reasons, ci, cmd, params, budget)
+        await _enforce_game_changer_limit(sf, deck, reasons, ci, cmd, params)
 
     cards = list(deck.values())
     # combos + nonbos
@@ -508,6 +569,8 @@ async def _enforce_budget(sf, deck, reasons, ci, cmd, params, budget):
     """Trim expensive non-locked cards (swapping for cheap alternatives / basics) until <= budget."""
     owned = params["owned"]
     q = f"{ci_query(ci)} legal:commander -t:land -is:funny usd<=2"
+    if GAME_CHANGER_LIMITS.get(params.get("mode")) is not None:
+        q += " -is:gamechanger"
     try:
         pool = await sf.search(q, limit=90, order="edhrec")
     except Exception:
@@ -611,13 +674,19 @@ def validate(cards, cmd, ci, params, budget):
                 and c["name"] not in params["owned"])
     if budget and total > budget:
         issues.append(f"Budget exceeded: ${total:.2f} > ${budget:.2f}")
+    game_changers = [c["name"] for c in cards if c.get("game_changer")]
+    gc_limit = GAME_CHANGER_LIMITS.get(params.get("mode"))
+    if gc_limit is not None and len(game_changers) > gc_limit:
+        issues.append(f"{params.get('mode', '').upper()} allows up to {gc_limit} Game Changers; found {len(game_changers)}: {', '.join(game_changers[:8])}")
     lands = sum(1 for c in cards if c["is_land"])
     if lands < 30:
         issues.append(f"Only {lands} lands — mana base may be unstable.")
     return {"valid": len(issues) == 0, "issues": issues,
             "checks": {"count": len(cards), "lands": lands, "singleton": not dupes,
                        "color_identity": not off, "legal": not illegal,
-                       "budget_ok": not (budget and total > budget)}}
+                       "budget_ok": not (budget and total > budget),
+                       "game_changers": len(game_changers),
+                       "game_changer_limit": gc_limit}}
 
 
 def simulate(cards, cmd, trials=2000, hand=7):
@@ -679,6 +748,11 @@ def quality_scores(cards, cmd, ci, combo_res, sim, analysis):
 def power_warnings(cards, mode, combo_res):
     w = []
     names = {c["name"] for c in cards}
+    game_changers = [c["name"] for c in cards if c.get("game_changer")]
+    gc_limit = GAME_CHANGER_LIMITS.get(mode)
+    if game_changers and gc_limit is not None:
+        level = "high" if len(game_changers) > gc_limit else "medium"
+        w.append({"level": level, "text": f"Game Changers ({len(game_changers)}/{gc_limit}): {', '.join(sorted(game_changers))}."})
     two = [c for c in combo_res["included"] if c.get("kind") == "two-card"]
     if two and mode in ("br3", "optimized", "budget"):
         w.append({"level": "high", "text": f"Deck contains {len(two)} easy two-card combo(s) — may exceed the target power level."})
