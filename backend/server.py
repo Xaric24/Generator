@@ -8,20 +8,25 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.environ.get('MONGO_URL')
+db_name = os.environ.get('DB_NAME')
+client = AsyncIOMotorClient(mongo_url) if mongo_url and db_name else None
+db = client[db_name] if client is not None else None
 
-from scryfall import Scryfall
-import engine
-import llm_service
+try:
+    from .scryfall import Scryfall
+    from . import engine, llm_service
+except ImportError:  # Local `cd backend && uvicorn server:app` support.
+    from scryfall import Scryfall
+    import engine
+    import llm_service
 
-sf = Scryfall(db)
+sf = Scryfall(db) if db is not None else None
 
 app = FastAPI(title="Commander Forge AI")
 api = APIRouter(prefix="/api")
@@ -36,11 +41,11 @@ class GenParams(BaseModel):
     budget: Optional[float] = None
     max_price_per_card: Optional[float] = None
     land_count: int = 32
-    locks: List[str] = []
-    excludes: List[str] = []
-    local_bans: List[str] = []
-    owned: List[str] = []
-    toggles: Dict[str, bool] = {}
+    locks: List[str] = Field(default_factory=list)
+    excludes: List[str] = Field(default_factory=list)
+    local_bans: List[str] = Field(default_factory=list)
+    owned: List[str] = Field(default_factory=list)
+    toggles: Dict[str, bool] = Field(default_factory=dict)
     seed: Optional[int] = None
 
 
@@ -58,16 +63,30 @@ def _clean(p: GenParams):
     }
 
 
+def _require_backend():
+    if sf is None or db is None:
+        raise HTTPException(
+            503,
+            "Backend storage is not configured. Set MONGO_URL and DB_NAME in the API host environment.",
+        )
+    return sf, db
+
+
 @api.get("/")
 async def root():
-    return {"app": "Commander Forge AI", "ai_available": llm_service.available()}
+    return {
+        "app": "Commander Forge AI",
+        "ai_available": llm_service.available(),
+        "database_configured": db is not None,
+    }
 
 
 @api.get("/commanders/search")
 async def search_commanders(q: str):
+    provider, _ = _require_backend()
     if len(q) < 2:
         return {"results": []}
-    names = await sf.autocomplete(q)
+    names = await provider.autocomplete(q)
     out = []
     for n in names[:12]:
         out.append(n)
@@ -76,7 +95,8 @@ async def search_commanders(q: str):
 
 @api.get("/card")
 async def get_card(name: str):
-    raw = await sf.named(name) or await sf.fuzzy(name)
+    provider, _ = _require_backend()
+    raw = await provider.named(name) or await provider.fuzzy(name)
     if not raw:
         raise HTTPException(404, "Card not found")
     return engine.norm_card(raw)
@@ -87,19 +107,29 @@ import asyncio
 JOBS = {}
 
 
+def _serverless_sync_generate():
+    return os.environ.get("SERVERLESS_SYNC_GENERATE") == "1" or os.environ.get("VERCEL") == "1"
+
+
+async def _save_deck(database, params, result):
+    doc = {"_id": str(uuid.uuid4()), "created": datetime.now(timezone.utc).isoformat(),
+           "commander": params["commander"], "mode": params["mode"], "result": result}
+    await database.decks.insert_one(doc)
+    result["deck_id"] = doc["_id"]
+    return result
+
+
 async def _run_generate(job_id, params):
     def prog(msg):
         if job_id in JOBS:
             JOBS[job_id]["progress"] = msg
     try:
-        result = await engine.generate(sf, db, params, progress=prog)
+        provider, database = _require_backend()
+        result = await engine.generate(provider, database, params, progress=prog)
         if result.get("error"):
             JOBS[job_id] = {"status": "error", "error": result["error"], "progress": ""}
             return
-        doc = {"_id": str(uuid.uuid4()), "created": datetime.now(timezone.utc).isoformat(),
-               "commander": params["commander"], "mode": params["mode"], "result": result}
-        await db.decks.insert_one(doc)
-        result["deck_id"] = doc["_id"]
+        result = await _save_deck(database, params, result)
         JOBS[job_id] = {"status": "done", "result": result, "progress": "Complete"}
     except Exception as e:
         logger.exception("job failed")
@@ -108,9 +138,21 @@ async def _run_generate(job_id, params):
 
 @api.post("/generate")
 async def generate(p: GenParams):
+    provider, database = _require_backend()
     job_id = str(uuid.uuid4())
+    params = _clean(p)
+    if _serverless_sync_generate():
+        try:
+            result = await engine.generate(provider, database, params, progress=lambda _msg: None)
+            if result.get("error"):
+                return {"job_id": job_id, "status": "error", "error": result["error"]}
+            result = await _save_deck(database, params, result)
+            return {"job_id": job_id, "status": "done", "result": result}
+        except Exception as e:
+            logger.exception("serverless generation failed")
+            return {"job_id": job_id, "status": "error", "error": str(e)}
     JOBS[job_id] = {"status": "running", "progress": "Queued...", "result": None}
-    asyncio.create_task(_run_generate(job_id, _clean(p)))
+    asyncio.create_task(_run_generate(job_id, params))
     return {"job_id": job_id}
 
 
@@ -125,8 +167,9 @@ async def generate_status(job_id: str):
 
 @api.post("/improve")
 async def improve(p: ImproveParams):
+    provider, database = _require_backend()
     try:
-        result = await engine.improve_deck(sf, db, {"decklist": p.decklist, "commander": p.commander})
+        result = await engine.improve_deck(provider, database, {"decklist": p.decklist, "commander": p.commander})
     except Exception as e:
         logger.exception("improve failed")
         raise HTTPException(500, f"Analysis failed: {e}")
@@ -135,13 +178,15 @@ async def improve(p: ImproveParams):
 
 @api.get("/decks")
 async def list_decks():
-    docs = await db.decks.find({}, {"result": 0}).sort("created", -1).to_list(30)
+    _, database = _require_backend()
+    docs = await database.decks.find({}, {"result": 0}).sort("created", -1).to_list(30)
     return {"decks": docs}
 
 
 @api.get("/decks/{deck_id}")
 async def get_deck(deck_id: str):
-    doc = await db.decks.find_one({"_id": deck_id})
+    _, database = _require_backend()
+    doc = await database.decks.find_one({"_id": deck_id})
     if not doc:
         raise HTTPException(404, "Deck not found")
     return doc["result"]
@@ -155,4 +200,5 @@ app.add_middleware(CORSMiddleware, allow_credentials=True,
 
 @app.on_event("shutdown")
 async def shutdown():
-    client.close()
+    if client is not None:
+        client.close()

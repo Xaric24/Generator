@@ -53,6 +53,9 @@ MongoDB    scryfall_cache (cached cards/queries), decks (generated decks)
 
 Generation runs as a **background job** (POST `/api/generate` → `job_id`, poll
 `/api/generate/status/{job_id}`) so long AI+data builds are never cut off by proxy timeouts.
+On Vercel/serverless, generation runs synchronously inside the request and returns the completed
+result directly because request-lifetime functions cannot reliably continue background tasks after
+the response.
 
 ## Technology choices
 
@@ -78,11 +81,10 @@ Generation runs as a **background job** (POST `/api/generate` → `job_id`, poll
 
 ```bash
 # Backend
-cd backend
-pip install -r requirements.txt
-cp .env.example .env      # set MONGO_URL / DB_NAME; optionally add an AI key
+pip install -r backend/requirements.txt
+copy backend\.env.example backend\.env      # set MONGO_URL / DB_NAME; optionally add an AI key
 # Frontend
-cd ../frontend
+cd frontend
 yarn install
 ```
 
@@ -92,14 +94,45 @@ Services are managed by supervisor in this environment:
 ## Environment variables
 
 See `backend/.env.example`. `MONGO_URL` and `DB_NAME` are required. AI keys are optional —
-without them the app runs deterministically. Provide `EMERGENT_LLM_KEY` **or** a
-`GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` to enable AI analysis & primers.
+without them the app runs deterministically. Provide a `GEMINI_API_KEY`, `OPENAI_API_KEY`, or
+`ANTHROPIC_API_KEY` to enable AI analysis & primers.
 A free-tier Google Gemini key from https://aistudio.google.com/apikey works well.
+
+For GitHub Pages, set the repository variable `REACT_APP_BACKEND_URL` to the deployed API origin,
+for example `https://your-vercel-project.vercel.app`. Do not include `/api`.
+
+## Deployment
+
+### GitHub Pages frontend
+
+This repo includes `.github/workflows/pages.yml`. In the GitHub repository:
+
+1. Open Settings -> Pages.
+2. Set Source to GitHub Actions.
+3. Add a repository variable named `REACT_APP_BACKEND_URL` with your API origin.
+4. Push to `main`; the workflow builds `frontend/` and publishes `frontend/build`.
+
+The React build is configured for `https://xaric24.github.io/generator`.
+
+### Vercel FastAPI backend
+
+The root `pyproject.toml`, `vercel.json`, and `requirements.txt` are for deploying the backend as
+a Vercel Python/FastAPI function with entrypoint `backend.server:app`.
+
+Set these Vercel environment variables:
+
+- `MONGO_URL`
+- `DB_NAME`
+- `CORS_ORIGINS=https://xaric24.github.io,https://xaric24.github.io/generator`
+- Optional: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `LLM_MODEL`
+
+The Vercel deployment uses the root `requirements.txt`, which intentionally contains only the
+runtime packages required by the serverless API.
 
 ## AI-provider configuration
 
-`llm_service.py` auto-selects a provider by key presence (Gemini → OpenAI → Anthropic →
-Emergent). Override the model with `LLM_MODEL`. Archetype analysis uses the primary model;
+`llm_service.py` auto-selects a provider by key presence (Gemini → OpenAI → Anthropic).
+Override the model with `LLM_MODEL`. Archetype analysis uses the primary model;
 the primer uses a faster/cheaper model to keep latency and cost low.
 
 ## Testing

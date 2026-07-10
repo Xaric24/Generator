@@ -3,6 +3,8 @@ Falls back to deterministic behaviour when no key is configured."""
 import os
 import json
 import logging
+import asyncio
+import requests
 
 logger = logging.getLogger("llm")
 
@@ -29,14 +31,71 @@ except Exception:  # pragma: no cover
 
 
 def available():
-    return bool(KEY) and HAVE_LIB
+    return bool(KEY) and (HAVE_LIB or PROVIDER in {"gemini", "openai", "anthropic"})
 
 
 async def _chat(system, prompt, session, model=None):
-    chat = LlmChat(api_key=KEY, session_id=session, system_message=system).with_model(
-        PROVIDER, model or MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    return resp if isinstance(resp, str) else str(resp)
+    if HAVE_LIB:
+        chat = LlmChat(api_key=KEY, session_id=session, system_message=system).with_model(
+            PROVIDER, model or MODEL)
+        resp = await chat.send_message(UserMessage(text=prompt))
+        return resp if isinstance(resp, str) else str(resp)
+    selected_model = model or MODEL
+    if PROVIDER == "openai":
+        return await asyncio.to_thread(_chat_openai, system, prompt, selected_model)
+    if PROVIDER == "gemini":
+        return await asyncio.to_thread(_chat_gemini, system, prompt, selected_model)
+    if PROVIDER == "anthropic":
+        return await asyncio.to_thread(_chat_anthropic, system, prompt, selected_model)
+    raise RuntimeError("No supported LLM adapter is available")
+
+
+def _chat_openai(system, prompt, model):
+    r = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            "temperature": 0.35,
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
+
+
+def _chat_gemini(system, prompt, model):
+    r = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        params={"key": KEY},
+        json={
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.35},
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    parts = r.json()["candidates"][0]["content"].get("parts", [])
+    return "".join(p.get("text", "") for p in parts)
+
+
+def _chat_anthropic(system, prompt, model):
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={"x-api-key": KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "system": system,
+            "max_tokens": 1600,
+            "temperature": 0.35,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    return "".join(part.get("text", "") for part in r.json().get("content", []) if part.get("type") == "text")
 
 
 def _extract_json(text):

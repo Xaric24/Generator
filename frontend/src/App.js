@@ -20,7 +20,8 @@ import { Badge } from "./components/ui/badge";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "./components/ui/hover-card";
 import "./index.css";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API_BASE = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+const API = `${API_BASE}/api`;
 
 const MODES = [
   { id: "best", label: "Best Possible", desc: "Strongest realistic build, no budget cap" },
@@ -141,6 +142,14 @@ export default function App() {
         land_count: landCount, locks: toList(locks), excludes: toList(excludes),
         local_bans: toList(bans), toggles, seed: null,
       });
+      if (start.data.result) {
+        setDeck(start.data.result); setRtab("decklist"); setLoading(false); setProgress("");
+        toast.success(`Deck generated — ${start.data.result.count} cards`);
+        return;
+      }
+      if (start.data.status === "error") {
+        throw new Error(start.data.error || "Generation failed");
+      }
       const jobId = start.data.job_id;
       const poll = async () => {
         const r = await axios.get(`${API}/generate/status/${jobId}`);
@@ -158,7 +167,7 @@ export default function App() {
       setTimeout(poll, 1500);
     } catch (e) {
       setLoading(false); setProgress("");
-      toast.error(e.response?.data?.detail || "Generation failed");
+      toast.error(e.response?.data?.detail || e.message || "Generation failed");
     }
   };
 

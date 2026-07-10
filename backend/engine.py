@@ -293,7 +293,10 @@ async def generate(sf, db, params, progress=None):
     if seed is not None:
         random.seed(seed)
 
-    from llm_service import analyze_and_suggest, build_primer
+    try:
+        from .llm_service import analyze_and_suggest, build_primer
+    except ImportError:
+        from llm_service import analyze_and_suggest, build_primer
     _p("Analyzing commander & ranking archetypes...")
     analysis = await analyze_and_suggest(raw, mode, params.get("theme"))
     synergy_names = [n for n in analysis.get("cards", []) if n != cmd["name"]]
@@ -413,7 +416,10 @@ async def generate(sf, db, params, progress=None):
     cards = list(deck.values())
     # combos + nonbos
     _p("Scanning combos & nonbos...")
-    from combos import find_combos, analyze_nonbos
+    try:
+        from .combos import find_combos, analyze_nonbos
+    except ImportError:
+        from combos import find_combos, analyze_nonbos
     names = [c["name"] for c in cards]
     combo_res = await find_combos(names, db)
     if params["toggles"].get("no_two_card_combos"):
@@ -792,7 +798,10 @@ async def improve_deck(sf, db, params):
     draw = sum(1 for c in cards if "Card Draw" in categorize(c))
     removal = sum(1 for c in cards if "Removal" in categorize(c) or "Board Wipe" in categorize(c))
     combo_res = await find_combos_wrapper(sf, db, [c["name"] for c in cards])
-    from combos import analyze_nonbos
+    try:
+        from .combos import analyze_nonbos
+    except ImportError:
+        from combos import analyze_nonbos
     nonbos = analyze_nonbos(cards)
 
     cuts, adds = [], []
@@ -828,7 +837,10 @@ async def improve_deck(sf, db, params):
 
 
 async def find_combos_wrapper(sf, db, names):
-    from combos import find_combos
+    try:
+        from .combos import find_combos
+    except ImportError:
+        from combos import find_combos
     return await find_combos(names, db)
 
 
