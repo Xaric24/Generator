@@ -1,0 +1,128 @@
+{
+  "theme_strategy": "The Arcane Terminal - Fusing mystical high-fantasy lore with brutalist, high-density data analytics. Dark mode by default to represent the 'Forge' and protect eyes during long deck-building sessions.",
+  "typography": {
+    "headings": {
+      "family": "Playfair Display",
+      "styles": "font-bold tracking-tighter",
+      "usage": "Use for all main H1/H2 titles, commander names, and hero text."
+    },
+    "body": {
+      "family": "Manrope",
+      "styles": "font-normal leading-relaxed tracking-normal",
+      "usage": "Use for descriptions, reasons, tooltips."
+    },
+    "data_and_stats": {
+      "family": "JetBrains Mono",
+      "styles": "font-medium tracking-tight",
+      "usage": "CRITICAL: Use for all numbers, prices, mana values, card counts, percentages, and simulation outputs."
+    },
+    "hierarchy_rules": [
+      "H1 (Hero): text-5xl sm:text-6xl tracking-tighter",
+      "H2 (Section): text-3xl sm:text-4xl",
+      "Overlines/Labels: text-xs uppercase tracking-[0.2em] font-mono text-muted-foreground",
+      "Never center-align data. Left-align dense content."
+    ]
+  },
+  "colors": {
+    "background": "#09090b",
+    "surface": "#121214",
+    "primary": "#ea580c",
+    "primary_description": "Forge Orange - Use for the Generate CTA, primary actions, and sparks/progress bars.",
+    "secondary": "#3b82f6",
+    "secondary_description": "Mana Blue - Use for informational highlights and neutral interactive elements.",
+    "warning_banned": "#ef4444",
+    "warning_nonbo": "#f59e0b",
+    "combo_synergy": "#8b5cf6",
+    "text_primary": "#fafafa",
+    "text_muted": "#a1a1aa",
+    "border": "#27272a",
+    "rules": [
+      "Never use pure black or pure white. All grays must be tinted slightly with blue or orange.",
+      "Use high-contrast text ratios for all data (APCA standard).",
+      "Do NOT use teal green or teal blue (#1B93A4)."
+    ]
+  },
+  "spacing_and_layout": {
+    "global": "Generous Spacing Philosophy: p-6 or p-8 for main containers. However, internal data tables must be dense.",
+    "grid_strategy": "Mode B: High Density Grid. grid-cols-1 md:grid-cols-3 lg:grid-cols-4. Tight gaps (gap-4) for data widgets.",
+    "navigation": "Use a persistent, glassmorphism vertical sidebar (or a highly customized scrollable horizontal sub-nav) for the 14 result tabs to avoid clutter.",
+    "commander_presentation": "Asymmetrical. The Commander card/art should span a dominant column (col-span-1 row-span-2), while stats/curves fill the remaining grid compactly."
+  },
+  "surfaces_and_micro_themes": {
+    "cards": "Grid Borders (The Technical Look). border-collapse style layout. Expose the skeleton. border-r border-b border-border/40. No soft shadows. Max 4px border-radius.",
+    "headers": "Glassmorphism (Crystal Variant). bg-black/60 with backdrop-blur-xl and backdrop-saturate-150. 1px delicate inner stroke border-white/10.",
+    "interactive_widgets": "Neumorphism (Tactile) mixed with sharp borders. 1px border-white/5 grounding it.",
+    "forbidden": [
+      "Complete transparent backgrounds on overlays/dropdowns.",
+      "Generic soft SaaS shadows."
+    ]
+  },
+  "component_guidelines": {
+    "tabs": "Do not use standard pill-tabs for the 14 sections. Use an explicit Sidebar Nav or cleanly underlined scrollable tabs (border-b-2 border-transparent data-[state=active]:border-primary).",
+    "tables_and_lists": "Dense, cardless. Use 1px borders between rows. Make heavy use of Shadcn Table, heavily stripped of padding (py-1 or py-2 max per row).",
+    "charts": "Use Recharts (via Shadcn Charts). Mana Curve needs a BarChart. Deck-quality scores need a RadarChart. Style them with the monospace font and brand colors.",
+    "forms": "Use Shadcn Select, Switch, and Slider for generation controls (cEDH, Budget, Toggles). Keep them compact.",
+    "progress": "For the 'Generate' button, use 'The Tracing Beam' effect (moving gradient border) and a matrix/terminal-like loading text cycle."
+  },
+  "visual_enhancers": {
+    "textures": "Apply a subtle noise overlay (mix-blend-overlay, opacity 10%) across the main background to kill the digital flatness.",
+    "glows": "Use very subtle drop-shadows on combo synergy badges to make them feel like glowing arcane runes.",
+    "mana_symbols": "Ensure mana symbols are aligned optically with text. Do not just drop raw SVGs; wrap them in a circular span with proper centering."
+  },
+  "motion_and_interaction": {
+    "hover_states": "Hovering over a card name MUST explicitly change text color and show the card image preview floating nearby (Tooltip/Popover).",
+    "transitions": "Use specific properties: transition-colors duration-200, transition-transform duration-200. NO transition-all.",
+    "loading": "Entrance animations should be staggered. Use Framer Motion for list items appearing in the decklist."
+  },
+  "images_and_assets": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1557951959-e3e30ee937e5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxmb3JnZSUyMHNwYXJrcyUyMGRhcmt8ZW58MHx8fHwxNzgyNDAwNDYwfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Forge sparks",
+      "usage": "Use as a large, low-opacity (10-20%) background overlay in the hero/search section to establish the 'Forge' atmosphere. Use mix-blend-screen."
+    },
+    "mystical_overlay": {
+      "url": "https://images.pexels.com/photos/13516301/pexels-photo-13516301.jpeg",
+      "description": "Mystical glowing arcane hand",
+      "usage": "Can be used for the 'Empty State' or 'Loading/Generating' modal."
+    },
+    "icons": "Use lucide-react (already installed). If more dense, add @phosphor-icons/react."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text against the dark background has a minimum 4.5:1 ratio.",
+    "focus": "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background",
+    "data_testid": "All interactive and key informational elements MUST include a data-testid attribute (e.g., data-testid='generate-deck-btn', data-testid='card-row')."
+  },
+  "instructions_to_main_agent": [
+    "Run: yarn add framer-motion recharts",
+    "Implement a dark-mode only application. Override index.css completely to force the dark palette.",
+    "The UI is a dense 'Bloomberg Terminal' for MTG. Prioritize information density over massive white space in the data views.",
+    "For the massive results section with 14 tabs, implement a left-aligned vertical sidebar navigation layout instead of horizontal tabs to prevent the UI from breaking.",
+    "Integrate Shadcn forms, tables, tabs, switches, select, and charts. Customize them strictly to the Grid Borders (Technical Look) guidelines.",
+    "Do NOT use HTML <select> or <input type='date'>.",
+    "Use Sonner for all toast notifications (e.g., 'Deck Exported to Moxfield').",
+    "Hovering over MTG card names must show the image. Mock this behavior visually if actual Scryfall API integration is pending."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable in layout containers, but keep data widgets dense.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories = main agent will use placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Use sonner for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ],
+  "GENERAL UI UX DESIGN GUIDELINES": [
+    "Design for scale. The application will have extensive data. Do not use designs that break when text strings are long.",
+    "Use progressive disclosure: hide complex filtering behind toggles or advanced panels.",
+    "Feedback is crucial: any 'Generate' or 'Calculate' action must give clear visual feedback immediately.",
+    "Error states must be helpful, not just red text. Offer recovery options."
+  ]
+}
