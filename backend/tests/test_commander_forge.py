@@ -183,6 +183,16 @@ class TestGenerateTheme:
         result = _post_generate(sess, payload)
         _assert_valid_100(result, "krenko/theme=goblin")
 
+    def test_theme_cascade_averna(self, sess):
+        payload = {"commander": "Averna, Chaos Bloom", "mode": "theme",
+                   "theme": "cascade", "land_count": 34}
+        result = _post_generate(sess, payload)
+        _assert_valid_100(result, "averna/theme=cascade")
+        cascade_cards = [c["name"] for c in result["cards"]
+                         if "cascade" in (c.get("oracle") or "").lower()
+                         or "discover" in (c.get("oracle") or "").lower()]
+        assert len(cascade_cards) >= 8, f"expected cascade theme cards, got {cascade_cards}"
+
 
 # ------------------------------------------------------------------ moxfield export round-trip
 class TestMoxfieldExport:

@@ -123,6 +123,8 @@ Power mode: {mode}
 Theme constraint: {theme or 'none'}
 
 Choose the single strongest coherent archetype for this commander at the "{mode}" power level.
+If a theme constraint is provided, treat it as mandatory: the archetype and most suggested synergy
+cards must directly support that theme even if the commander also has other obvious subthemes.
 Then list 55-65 REAL Magic cards (exact Oracle names) that form the synergy core, payoffs, win conditions,
 and key support for that plan. STRICTLY stay within the color identity ({ci}). Do NOT list basic lands,
 generic staples like Sol Ring/Arcane Signet (they are auto-added), or off-color cards.

@@ -32,6 +32,26 @@ MODE_TARGETS = {
 GAME_CHANGER_LIMITS = {"br3": 3}
 OTAG = {"ramp": "otag:ramp", "draw": "otag:card-advantage", "removal": "otag:removal",
         "wipe": "otag:board-wipe", "counter": "otag:counterspell", "tutor": "otag:tutor"}
+THEME_QUERIES = {
+    "artifact": ["t:artifact -t:land"],
+    "token": ["o:\"create\" o:\"token\""],
+    "counter": ["o:\"+1/+1 counter\""],
+    "graveyard": ["o:graveyard"],
+    "sacrifice": ["o:sacrifice"],
+    "spellslinger": ["(t:instant or t:sorcery)"],
+    "landfall": ["o:landfall"],
+    "cascade": ["o:cascade", "o:discover", "o:\"cast\" o:\"from exile\""],
+    "lifegain": ["o:\"gain life\""],
+    "energy": ["o:\"{E}\""],
+    "dragon": ["t:dragon"],
+    "elf": ["t:elf"],
+    "goblin": ["t:goblin"],
+    "vampire": ["t:vampire"],
+    "zombie": ["t:zombie"],
+    "reanimator": ["o:\"return target creature card\" o:graveyard"],
+    "voltron": ["(t:equipment or t:aura)"],
+    "aristocrats": ["o:\"whenever\" o:\"dies\""],
+}
 
 
 def norm_card(c):
@@ -187,10 +207,47 @@ def score_card(card, synergy_names, mode, ci):
     return round(min(100, max(1, s)), 1), "; ".join(reasons[:3])
 
 
+def _theme_key(theme):
+    t = (theme or "").strip().lower()
+    aliases = {
+        "cascades": "cascade",
+        "cascade matters": "cascade",
+        "discover": "cascade",
+        "discover matters": "cascade",
+        "land": "landfall",
+        "lands": "landfall",
+        "tokens": "token",
+        "counters": "counter",
+        "spells": "spellslinger",
+    }
+    return aliases.get(t, t)
+
+
+def _theme_card_match(card, theme):
+    key = _theme_key(theme)
+    o = (card.get("oracle") or "").lower()
+    tl = (card.get("type") or "").lower()
+    name = (card.get("name") or "").lower()
+    if key == "cascade":
+        return "cascade" in o or "discover" in o or ("from exile" in o and "cast" in o)
+    if key == "landfall":
+        return "landfall" in o
+    if key in ("goblin", "elf", "dragon", "vampire", "zombie"):
+        return key in tl or key in name
+    if key == "artifact":
+        return "artifact" in tl
+    if key == "token":
+        return "token" in o
+    if key == "counter":
+        return "+1/+1 counter" in o
+    return False
+
+
 async def _deterministic_synergy(sf, cmd, ci, params, mode):
     """Derive synergy cards from commander creature types / theme without an LLM."""
     queries = []
     theme = (params.get("theme") or "").strip().lower()
+    theme = _theme_key(theme)
     tl = cmd["type"].lower()
     subtypes = []
     if "—" in cmd["type"]:
@@ -202,21 +259,13 @@ async def _deterministic_synergy(sf, cmd, ci, params, mode):
     for st in creature_types[:2]:
         queries.append(f"t:{st.lower()} {ci_query(ci)} legal:commander -is:funny")
     o = cmd["oracle"].lower()
-    theme_map = {
-        "artifact": "t:artifact -t:land", "token": "o:\"create\" o:\"token\"",
-        "counter": "o:\"+1/+1 counter\"", "graveyard": "o:graveyard", "sacrifice": "o:sacrifice",
-        "spellslinger": "(t:instant or t:sorcery)", "landfall": "o:landfall",
-        "lifegain": "o:\"gain life\"", "energy": "o:\"{E}\"", "dragon": "t:dragon",
-        "elf": "t:elf", "goblin": "t:goblin", "vampire": "t:vampire", "zombie": "t:zombie",
-        "reanimator": "o:\"return target creature card\" o:graveyard",
-        "voltron": "(t:equipment or t:aura)", "aristocrats": "o:\"whenever\" o:\"dies\"",
-    }
-    if theme and theme in theme_map:
-        queries.insert(0, f"{theme_map[theme]} {ci_query(ci)} legal:commander -is:funny")
+    if theme and theme in THEME_QUERIES:
+        for q in reversed(THEME_QUERIES[theme]):
+            queries.insert(0, f"{q} {ci_query(ci)} legal:commander -is:funny")
     else:
-        for k, q in theme_map.items():
+        for k, qs in THEME_QUERIES.items():
             if k in o:
-                queries.append(f"{q} {ci_query(ci)} legal:commander -is:funny")
+                queries.append(f"{qs[0]} {ci_query(ci)} legal:commander -is:funny")
                 break
     if not queries:
         queries.append(f"{ci_query(ci)} legal:commander -t:land -is:funny")
@@ -358,6 +407,17 @@ async def generate(sf, db, params, progress=None):
     analysis = await analyze_and_suggest(raw, mode, params.get("theme"))
     synergy_names = [n for n in analysis.get("cards", []) if n != cmd["name"]]
     det_synergy = []
+    theme = params.get("theme")
+    if theme and synergy_names:
+        resolved_theme = await sf.collection(synergy_names[:35])
+        theme_hits = sum(1 for c in resolved_theme if _theme_card_match(norm_card(c), theme))
+        if theme_hits < 8:
+            _p("Reinforcing theme package...")
+            det_synergy = await _deterministic_synergy(sf, cmd, ci, params, mode)
+            det_names = [c["name"] for c in det_synergy]
+            synergy_names = list(dict.fromkeys(det_names + synergy_names))
+            analysis["cards"] = synergy_names
+            analysis["archetype"] = f"{_theme_key(theme).title()} {analysis.get('archetype', 'Commander')}"
     if not synergy_names:
         _p("Deriving synergy package...")
         det_synergy = await _deterministic_synergy(sf, cmd, ci, params, mode)
