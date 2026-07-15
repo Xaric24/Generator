@@ -11,6 +11,7 @@ MULTI_COPY = {"Persistent Petitioners", "Rat Colony", "Relentless Rats", "Shadow
               "Dragon's Approach", "Seven Dwarves", "Slime Against Humanity", "Templar Knight",
               "Cid, Timeless Artificer"}
 COLOR_TO_BASIC = {"W": "Plains", "U": "Island", "B": "Swamp", "R": "Mountain", "G": "Forest"}
+BASIC_TO_COLOR = {v.lower(): k for k, v in COLOR_TO_BASIC.items()}
 
 FAST_MANA = {"Sol Ring", "Mana Crypt", "Mana Vault", "Grim Monolith", "Chrome Mox", "Mox Diamond",
              "Mox Opal", "Jeweled Lotus", "Dark Ritual", "Cabal Ritual", "Lion's Eye Diamond",
@@ -80,6 +81,7 @@ def norm_card(c):
         "edhrec": c.get("edhrec_rank", 999999) or 999999, "layout": c.get("layout", "normal"),
         "set": (c.get("set") or "").upper(), "cn": c.get("collector_number", ""),
         "game_changer": bool(c.get("game_changer")),
+        "produced_mana": c.get("produced_mana") or [],
         "is_land": "Land" in tl, "is_basic": c["name"] in BASICS,
         "is_mdfc": c.get("layout") in ("modal_dfc", "transform") and "Land" in " ".join(
             f.get("type_line", "") for f in c.get("card_faces", [])),
@@ -94,7 +96,45 @@ def ci_query(ci):
 
 import re
 _ADD_RE = re.compile(r"add (?:one|two|three|four|five|\{|an amount|.{0,8}mana)")
-_TUTOR_RE = re.compile(r"search your library for (?:a card|.{0,30}card,? .{0,20}(?:hand|battlefield))")
+
+
+def is_tutor(card):
+    """Return True for library searches other than ordinary land ramp/fixing."""
+    o = card["oracle"].lower()
+    if "search your library" not in o:
+        return False
+    # Cultivate, fetch lands, and similar mana fixing are ramp, not tutors for
+    # the purpose of the social-rule toggle.
+    land_search = ("basic land" in o or "land card" in o)
+    nonland_search = any(term in o for term in (
+        "a card", "any card", "creature card", "artifact card", "enchantment card",
+        "instant card", "sorcery card", "planeswalker card", "battle card",
+    ))
+    return nonland_search or not land_search
+
+
+def land_fits_color_identity(card, ci):
+    """Reject nonbasics that only make off-color mana or are redundant in mono-color."""
+    if not card.get("is_land") or card.get("is_basic") or not ci:
+        return True
+    o = card["oracle"].lower()
+    ci_set = set(ci)
+    fetchable = {basic for basic, color in BASIC_TO_COLOR.items()
+                 if basic in o and color in ci_set}
+    searches_land_types = "search your library" in o and any(basic in o for basic in BASIC_TO_COLOR)
+    if searches_land_types and not fetchable:
+        return False
+    produced = set(card.get("produced_mana") or []) & set("WUBRG")
+    if produced and not produced.intersection(ci_set):
+        return False
+    if len(ci) == 1 and produced - ci_set and "commander's color identity" not in o:
+        return False
+    # These lands grant a basic land type globally. In a deck already limited
+    # to that one color, the matching effect is redundant; the others only
+    # enable off-color mana and opposing decks.
+    if len(ci) == 1 and card["name"] in {"Urborg, Tomb of Yawgmoth", "Yavimaya, Cradle of Growth"}:
+        return False
+    return True
 
 
 def is_mana_source(card):
@@ -123,7 +163,7 @@ def categorize(card):
         cats.append("Board Wipe")
     if "counter target" in o:
         cats.append("Counterspell")
-    if _TUTOR_RE.search(o):
+    if is_tutor(card):
         cats.append("Tutor")
     if "hexproof" in o or "indestructible" in o or "protection" in o or "shroud" in o:
         cats.append("Protection")
@@ -162,6 +202,8 @@ def passes_filters(card, ci, budget, params):
         return False, "not commander-legal / banned"
     if not set(card["color_identity"]).issubset(set(ci)):
         return False, "off color identity"
+    if not land_fits_color_identity(card, ci):
+        return False, "land does not support commander's colors"
     nm = card["name"]
     if nm in params["excludes"]:
         return False, "excluded by user"
@@ -505,6 +547,8 @@ async def generate(sf, db, params, progress=None):
 
     land_count = params.get("land_count") or 32
     targets = dict(MODE_TARGETS.get(mode, MODE_TARGETS["optimized"]))
+    if params["toggles"].get("no_tutors"):
+        targets["tutor"] = 0
     if "U" not in ci:
         targets["counter"] = 0
     nonland_target = 99 - land_count
@@ -769,6 +813,9 @@ def validate(cards, cmd, ci, params, budget):
     off = [c["name"] for c in cards if not set(c["color_identity"]).issubset(set(ci))]
     if off:
         issues.append(f"Off-color-identity cards: {', '.join(off[:5])}")
+    bad_lands = [c["name"] for c in cards if not land_fits_color_identity(c, ci)]
+    if bad_lands:
+        issues.append(f"Lands do not support commander colors: {', '.join(bad_lands[:8])}")
     illegal = [c["name"] for c in cards if not c["legal"] and not c["is_basic"]]
     if illegal:
         issues.append(f"Illegal/banned cards: {', '.join(illegal[:5])}")
@@ -795,6 +842,7 @@ def validate(cards, cmd, ci, params, budget):
     return {"valid": len(issues) == 0, "issues": issues,
             "checks": {"count": len(cards), "lands": lands, "singleton": not dupes,
                        "color_identity": not off, "legal": not illegal,
+                       "land_color_fit": not bad_lands,
                        "budget_ok": not (budget and total > budget),
                        "game_changers": len(game_changers),
                        "game_changer_limit": gc_limit}}
