@@ -123,8 +123,16 @@ Set these Vercel environment variables:
 
 - `MONGO_URL`
 - `DB_NAME`
-- `CORS_ORIGINS=https://xaric24.github.io,https://xaric24.github.io/generator`
+- `CORS_ORIGINS=https://xaric24.github.io` (comma-separate additional origins if needed)
 - Optional: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `LLM_MODEL`
+
+The API defaults to the GitHub Pages origin and applies an in-process generation
+limit (5 requests per client per minute, 2 concurrent jobs, and 20 queued jobs).
+Tune `CORS_ORIGINS`, `GENERATE_RATE_LIMIT_MAX_REQUESTS`,
+`GENERATE_RATE_LIMIT_WINDOW_SECONDS`, `MAX_CONCURRENT_GENERATIONS`,
+`MAX_PENDING_JOBS`, and `JOB_TTL_SECONDS` for your deployment. For a
+multi-instance deployment, enforce equivalent rate limits at the edge because
+the in-process limit is per instance.
 
 The Vercel deployment uses the root `requirements.txt`, which intentionally contains only the
 runtime packages required by the serverless API.
