@@ -174,17 +174,17 @@ export default function App() {
   return (
     <div className="relative min-h-screen" style={{ zIndex: 1 }}>
       <Toaster theme="dark" position="top-right" richColors />
-      <header className="glass sticky top-0 z-30 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="glass sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="w-10 h-10 rounded flex items-center justify-center bg-primary/15 border border-primary/30">
             <Flame className="w-5 h-5 text-primary" />
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-tighter leading-none">Commander Forge <span className="text-primary">AI</span></h1>
-            <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground font-mono-data mt-1">Deterministic EDH deck architect</p>
+          <div className="min-w-0">
+            <h1 className="font-display text-lg font-extrabold leading-tight tracking-tighter sm:text-2xl sm:leading-none">Commander Forge <span className="text-primary">AI</span></h1>
+            <p className="mt-1 hidden font-mono-data text-[10px] uppercase tracking-[0.25em] text-muted-foreground sm:block">Deterministic EDH deck architect</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <TopTab id="build" cur={tab} set={setTab} icon={Wand2} label="Build" />
           <TopTab id="improve" cur={tab} set={setTab} icon={GitCompareArrows} label="Improve" />
         </div>
@@ -217,8 +217,8 @@ function TopTab({ id, cur, set, icon: Icon, label }) {
   const active = cur === id;
   return (
     <button data-testid={`toptab-${id}`} onClick={() => set(id)}
-      className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-medium transition-colors duration-200 border ${active ? "bg-primary/15 border-primary/40 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-      <Icon className="w-4 h-4" /> {label}
+      className={`flex h-11 items-center gap-2 rounded border px-2.5 text-sm font-medium transition-colors duration-200 sm:px-4 ${active ? "bg-primary/15 border-primary/40 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+      <Icon className="w-4 h-4" /> <span className="hidden sm:inline">{label}</span><span className="sr-only sm:hidden">{label}</span>
     </button>
   );
 }
@@ -239,7 +239,7 @@ function BuilderPanel(p) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input data-testid="commander-search" value={p.query} placeholder="Search a commander..."
-            onChange={(e) => p.setQuery(e.target.value)} className="pl-9 bg-card border-border" />
+            onChange={(e) => p.setQuery(e.target.value)} className="h-11 border-border bg-card pl-9" />
           {p.sugs.length > 0 && (
             <div className="absolute z-40 mt-1 w-full glass rounded-md overflow-hidden border border-border">
               {p.sugs.map((s) => (
@@ -274,7 +274,7 @@ function BuilderPanel(p) {
         <div className="grid grid-cols-2 gap-1.5">
           {MODES.map((m) => (
             <button key={m.id} data-testid={`mode-${m.id}`} onClick={() => p.setMode(m.id)} title={m.desc}
-              className={`text-left px-3 py-2 rounded border text-xs transition-colors duration-200 ${p.mode === m.id ? "bg-primary/15 border-primary/50 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+              className={`min-h-11 rounded border px-3 py-2 text-left text-xs transition-colors duration-200 ${p.mode === m.id ? "bg-primary/15 border-primary/50 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
               <div className="font-semibold">{m.label}</div>
             </button>
           ))}
@@ -336,10 +336,17 @@ function BuilderPanel(p) {
 
 function EmptyState() {
   return (
-    <div className="glass rounded-lg h-full min-h-[400px] flex flex-col items-center justify-center text-center p-10 fadeup">
-      <img src="https://images.pexels.com/photos/13516301/pexels-photo-13516301.jpeg" alt="" className="w-40 h-40 object-cover rounded-full opacity-40 mb-6" style={{ maskImage: "radial-gradient(circle, black 55%, transparent 72%)" }} />
-      <h2 className="font-display text-3xl font-bold tracking-tighter">Forge a Commander Deck</h2>
-      <p className="text-muted-foreground max-w-md mt-3 text-sm">Search for a commander, choose a power level, set your budget and social rules, then generate a legal, synergistic 100-card deck with combo & nonbo analysis.</p>
+    <div className="glass flex min-h-[320px] h-full flex-col justify-center rounded-lg p-8 text-left fadeup sm:p-10">
+      <div className="max-w-md">
+        <p className="font-mono-data text-[10px] uppercase tracking-[0.2em] text-primary">Deck builder</p>
+        <h2 className="mt-2 font-display text-3xl font-bold tracking-tighter">Start with a commander.</h2>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">Search for a commander on the left, then tune power, budget, and table rules before forging your deck.</p>
+        <div className="mt-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded border border-border px-3 py-2">100-card validation</span>
+          <span className="rounded border border-border px-3 py-2">Combo analysis</span>
+          <span className="rounded border border-border px-3 py-2">Moxfield export</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -745,7 +752,13 @@ function ImproveView() {
         </Button>
       </div>
       <div>
-        {!res && <div className="glass rounded-lg h-full min-h-[300px] flex items-center justify-center text-muted-foreground text-sm">Paste a deck and analyze to see cuts, adds, combos & a power estimate.</div>}
+        {!res && (
+          <div className="glass flex min-h-[300px] h-full flex-col justify-center rounded-lg p-8 text-left sm:p-10">
+            <p className="font-mono-data text-[10px] uppercase tracking-[0.2em] text-primary">Deck analysis</p>
+            <h2 className="mt-2 font-display text-2xl font-bold">Your upgrade plan appears here.</h2>
+            <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">Paste a decklist to see cuts, adds, combos, nonbos, and a power estimate in one place.</p>
+          </div>
+        )}
         {res && <ImproveResults res={res} />}
       </div>
     </div>
