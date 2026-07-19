@@ -28,7 +28,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install backend dependencies
-        run: python -m pip install -r requirements.txt pytest
+        run: python -m pip install -r requirements.txt pytest pytest-xdist
 
       - name: Run isolated backend tests
         run: python -m pytest backend/tests/test_engine_filters.py backend/tests/test_api_safety.py -q
