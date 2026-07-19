@@ -274,7 +274,7 @@ function BuilderPanel(p) {
         <div className="grid grid-cols-2 gap-1.5">
           {MODES.map((m) => (
             <button key={m.id} data-testid={`mode-${m.id}`} onClick={() => p.setMode(m.id)} title={m.desc}
-              className={`min-h-11 rounded border px-3 py-2 text-left text-xs transition-colors duration-200 ${p.mode === m.id ? "bg-primary/15 border-primary/50 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+              className={`${m.id === "theme" ? "col-span-2" : ""} min-h-11 rounded border px-3 py-2 text-left text-xs transition-colors duration-200 ${p.mode === m.id ? "bg-primary/15 border-primary/50 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
               <div className="font-semibold">{m.label}</div>
             </button>
           ))}
@@ -303,13 +303,13 @@ function BuilderPanel(p) {
       </Field>
 
       <Field label="Social Rules">
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {TOGGLES.map(([k, lbl]) => (
-            <div key={k} className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{lbl}</span>
-              <Switch data-testid={`toggle-${k}`} checked={!!p.toggles[k]}
+            <label key={k} htmlFor={`toggle-${k}`} className="flex min-h-11 cursor-pointer items-center justify-between rounded border border-transparent px-3 transition-colors hover:border-border hover:bg-card/60">
+              <span className="text-sm text-muted-foreground">{lbl}</span>
+              <Switch id={`toggle-${k}`} data-testid={`toggle-${k}`} checked={!!p.toggles[k]}
                 onCheckedChange={(v) => p.setToggles((t) => ({ ...t, [k]: v }))} />
-            </div>
+            </label>
           ))}
         </div>
       </Field>
